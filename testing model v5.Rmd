@@ -1,0 +1,441 @@
+---
+title: "Role of PCR and antibody testing in COVID-19 control"
+author: "Nicholas C Grassly, Marga Pons-Salort, Edward PK Parker1, Peter J White, Neil Ferguson and the Imperial College COVID-19 Response Team"
+date: "01/05/2020"
+output:
+  html_document: default
+  word_document: default
+bibliography: NCG_library_2020.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(directlabels)
+library(gridExtra)
+library(scales)
+dt=0.1
+recalc<-FALSE
+
+```
+
+## Abstract
+
+The World Health Organization has called for increased molecular testing in response to the COVID-19 pandemic, but different countries have taken very different approaches. We used a simple mathematical model to investigate the potential effectiveness of alternative testing strategies for COVID-19 control. Weekly screening of healthcare workers (HCWs) and other at-risk groups using PCR or point-of-care tests for infection irrespective of symptoms is estimated to reduce their contribution to transmission by 25-33%, on top of reductions achieved by self-isolation following symptoms. Widespread PCR testing in the general population is unlikely to limit transmission more than contact-tracing and quarantine based on symptoms alone, but could allow earlier release of contacts from quarantine. Immunity passports based on tests for antibody or infection could support return to work but face significant technical, legal and ethical challenges. Testing is essential for pandemic surveillance but its direct contribution to the prevention of transmission is likely to be limited to patients, HCWs and other high-risk groups. 
+
+
+## Background
+
+Different countries have taken very different approaches to molecular testing in response to the COVID-19 pandemic. The observation that countries with high rates of testing for SARS-CoV-2 have more effectively controlled transmission (e.g. South Korea, Germany) has led to calls for increased testing in other countries with lower rates of testing (e.g. UK, USA). However, the contribution of testing to COVID-19 control compared with other interventions such as self-isolation and social distancing is currently unclear. In addition, the optimal allocation of limited testing resources is relatively unexplored. There is a clear priority to test suspected COVID-19 patients in hospital to inform treatment, infection control and to monitor the extent of the epidemic [@RN5379]. As increased testing resources become available it will be important to determine the role of wider testing in different population groups, not only to monitor the epidemic but also to prevent transmission. 
+
+Here we estimate the potential impact on SARS-CoV-2 transmission of alternative strategies for deploying tests that identify active infection (including both PCR and molecular point of care (mPOC) assays) and antibody tests that indicate past infection. We consider strategies aimed at healthcare workers (HCWs), other key workers and the general population, including regular testing irrespective of symptoms and the concept of ‘immunity passports’. We assume testing is already in place for suspected COVID-19 inpatients. We focus on the UK, but our results are relevant for other countries that are considering their testing strategies. We use a standard mathematical description of infectivity [@RN1589] which was recently used to explore the role of contact tracing in the control of COVID-19 [@RN5344].
+
+
+## Testing healthcare workers
+
+Healthcare workers (HCWs) have been disproportionately affected and infected by SARS-CoV-2, constituting between 4% and 19% of all reported COVID-19 cases in China and Europe (3.8% in China [@RN5382], 4.6% in Germany [@RN5383], 9% in Italy [@RN5381] and 19% in Spain [@RN5380]). Furthermore, absence rates among HCWs as a result of their own sickness or household isolation because of sick household members have been high. In a survey of members and fellows of the Royal College of Physicians at the end of March, 11% in England reported being currently off work due to self-isolation as a result of their own COVID-19 symptoms (59%) or those of a household member (41%)  [@RN5388].
+
+This disproportionate representation of HCWs reflects their exposure to infection from patients and fellow staff, resulting in a higher incidence of infection compared with the general population [@RN5347; @RN5395]. Transmission to and potentially among this high-risk group compromises both their own health and may also contribute to nosocomial spread within hospitals. 
+
+
+_Testing symptomatic or self-isolating healthcare workers_
+
+Current testing strategy for HCWs in the UK focuses on PCR testing for infection among symptomatic individuals [@RN5384]. The effectiveness of self-isolation based on symptoms depends on the amount of pre-symptomatic transmission from infections that become symptomatic, and the proportion of infections that are asymptomatic and their relative infectiousness. Available data suggest that approximately 20-50% of infections are asymptomatic [@RN5311; @RN5314; @RN5313], infectiousness of asymptomatic infection that is either equivalent to or lower than symptomatic infection, depending on interpretation of viral load data [@RN5346; @RN5398]) (15, 16), and that approximately 40% of transmission from symptomatic infections occurs before symptom onset [@RN5343; @RN5344]. Assuming HCWs self-isolate as soon as symptoms appear, we predict this to restrict onwards transmission from infected workers to other HCW and patients by between 16% and 57% (Figure 1; Appendix). 
+
+
+```{r plot_infectiousness, message=F, echo=F, warning=F,  fig.width=10,fig.height=4, fig.cap="**Figure 1** Infectiousness of SARS-CoV-2 over time since infection estimated from the serial interval of linked cases and the reduction of transmission as a result of self-isolation after symptoms or a PCR positive test result. Self-isolation or quarantine after a positive PCR test reduces subsequent transmission by detecting A) presymptomatic and B) asymptomatic infections. The shaded areas in these plots illustrates infectiousness that would be limited by PCR testing (grey) or self-isolation following symptom onset (red) at 4 and 6 days respectively after infection. The area under the curves is equal to the reproduction number. C) Percentage reduction in the reproduction number by self-isolation following symptoms as a function of the proportion of infections that are asymptomatic and their relative infectiousness compared with symptomatic infections. D) Additional percentage reduction in the reproduction number by a policy of repeated PCR testing at regular intervals with different timeliness from sample collection to isolation, assuming one third of infections are asymptomatic and that they are 10% as infectious as symptomatic infections. These plots assume PCR test sensitivity is 90% during days 3-21 of infection (see Appendix for details of the mathematical model and sensitivity analysis)."}
+dt<-0.1 #Decrease this for final calcs
+test_sensitivity=0.9
+start_shedding<-3
+end_shedding<-21
+tau = seq(0,140,dt)
+median_serial_interval=6
+shape = 2.8
+scale=median_serial_interval/(log(2)^(1/shape))
+beta = dweibull(tau, shape = shape, scale = scale)
+beta_censored = dweibull(tau, shape = shape, scale = scale)
+beta_censored_screen<-beta_censored
+beta_censored[1:(6/dt)]<-0
+beta_censored_screen[1:(4/dt)]<-0
+
+st<-c(rep(0,start_shedding/dt),rep(test_sensitivity,(end_shedding-start_shedding)/dt),rep(0,(length(tau)-end_shedding/dt)))
+
+df<-as.data.frame(cbind(tau,beta, beta_censored, st))
+
+prop_sympt<-2/3
+rel_infect_asympt<-0.0
+df$beta_s<-df$beta*(1-prop_sympt*pgamma(df$tau, shape=5.807, scale = 0.948))
+prop_sympt_trans<-prop_sympt/(prop_sympt+(1-prop_sympt)*rel_infect_asympt)
+df$beta_s2<-df$beta*(1-prop_sympt_trans*pgamma(df$tau, shape=5.807, scale = 0.948))
+df$beta_censored2 = df$beta_s2
+df$beta_censored2[1:(5/dt)]<-0
+
+p1<-ggplot(data=df, aes(x=tau)) +
+  geom_line(aes(y=beta)) + ylab("Infectiousness") + xlab(expression("Time since infection")) + xlim(0,20) +
+#  geom_line(aes(y=st*0.08), linetype="dotted") +
+  geom_line(aes(y=beta_s2), color = "red") +
+  geom_ribbon(aes(ymax=beta_censored2), ymin=0, alpha=0.5, fill="red") + geom_vline(xintercept=5, linetype="dashed") +
+#  geom_text(x=10,y=0.145,label = "transmission prevented", hjust=0) +
+#  geom_segment(x=7, xend=9.5,y=0.1,yend=0.14) +
+  theme_minimal() + labs(tag = "A)")
+#  geom_text(x=9,y=0.145,label = paste("Self-isolation stops ", round((1-(sum(df$beta_s)/sum(df$beta)))*100,0),"% of transmission", sep=""), hjust=0)
+
+
+p1<-ggplot(data=df, aes(x=tau)) +
+  geom_line(aes(y=beta)) + ylab("Infectiousness") + xlab(expression("Time since infection")) + xlim(0,20) +
+#  geom_line(aes(y=st*0.08), linetype="dotted") +
+  # geom_line(aes(y=beta_s2), color = "red") +
+  geom_ribbon(aes(ymax=beta_censored), ymin=0, alpha=0.5, fill="red") + geom_vline(xintercept=6, linetype="dashed") +
+  geom_ribbon(aes(ymax=beta_censored_screen), ymin=0, alpha=0.5, fill="grey") + geom_vline(xintercept=4, linetype="dashed") +
+#  geom_text(x=10,y=0.145,label = "transmission prevented", hjust=0) +
+#  geom_segment(x=7, xend=9.5,y=0.1,yend=0.14) +
+  theme_minimal() + labs(tag = "A)")
+#  geom_text(x=9,y=0.145,label = paste("Self-isolation stops ", round((1-(sum(df$beta_s)/sum(df$beta)))*100,0),"% of transmission", sep=""), hjust=0)
+
+p7<-ggplot(data=df, aes(x=tau)) +
+  geom_line(aes(y=beta)) + ylab("Infectiousness") + xlab(expression("Time since infection")) + xlim(0,20) +
+  geom_ribbon(aes(ymax=beta_censored_screen), ymin=0, alpha=0.5, fill="grey") + geom_vline(xintercept=4, linetype="dashed") +
+  theme_minimal() + labs(tag = "B)")
+
+sum_beta<-sum(df$beta)
+prevent_self_isol<-function(prop_asympt,rel_infect){
+  if(prop_asympt==1.0){
+    return(0)
+  }else{
+    sigma<-(1-prop_asympt)/((1-prop_asympt)+prop_asympt*rel_infect)
+    beta_s<-df$beta*(1-sigma*pgamma(df$tau, shape=5.807, scale = 0.948))
+    return((1-sum(beta_s)/sum_beta)*100)
+  }
+}
+
+
+  asymp_array<-seq(0,1,0.01)
+  rel_inf_array<-seq(0,1,0.01)
+  m<-expand.grid(asymp_array,rel_inf_array)
+  names(m)<-c("asymptomatic","infectiousness")
+  blocked_si<-mapply(prevent_self_isol,m$asymptomatic,m$infectiousness)
+  df4<-data.frame(cbind(m,blocked_si))
+
+p2<-ggplot(data=df4, aes(x=asymptomatic*100,y=infectiousness, z=blocked_si)) +
+  stat_contour(aes(color = ..level..)) + theme_minimal() +
+  xlab("Proportion of infections asymptomatic (%)") + ylab("Relative infectiousness of asymptomatics") +
+  scale_x_continuous(breaks=seq(0,100,20)) +
+  theme_minimal()
+p3 <- direct.label(p2, "top.pieces") + labs(tag = "C)")
+
+#code for regular screening
+
+max_duration_detect<-28
+rel_infect_asympt<-0.1
+prop_sympt_trans<-prop_sympt/(prop_sympt+(1-prop_sympt)*rel_infect_asympt)
+df$beta_s2<-df$beta*(1-prop_sympt_trans*pgamma(df$tau, shape=5.807, scale = 0.948))
+
+prevent_func2<-function(TT = 7, delay_res = 2){
+  df$sum_beta_s2<-NA
+  for(i in 1:(dim(df)[1])){
+    if(i<dim(df)[1]-(i+delay_res/dt)){
+      df$sum_beta_s2[i]<-sum(df$beta_s2[(i+delay_res/dt):(dim(df)[1])])/sum(df$beta_s2)
+    }else{
+      df$sum_beta_s2[i]<-0
+    }
+  }
+  n_calc<-ceiling(max_duration_detect/TT)
+  st_mat<-matrix(data=1-df$st[1:(n_calc*TT/dt)], ncol=TT/dt, nrow=n_calc,byrow = T)
+  pi_sum<-0
+  st_inst <-matrix(data=NA,nrow=n_calc,ncol=TT/dt)
+  for(j in 1:n_calc){
+    if(j==1){
+      st_inst[j,]<-rep(1,TT/dt)
+    }else if(j==2){
+      st_inst[j,]<-st_mat[1,]
+    }else {
+      st_inst[j,]<-apply(st_mat[1:(j-1),],MARGIN = 2, prod)
+    }
+  }
+  for(i in 1:n_calc){
+    pi_sum<-pi_sum + sum(st_inst[i,]*df$st[(((i-1)*TT/dt)+1):((i*TT)/dt)]*df$sum_beta_s2[(((i-1)*TT/dt)+1):((i*TT)/dt)])/(TT/dt)
+  }
+  return(pi_sum)
+}
+
+if(recalc==TRUE){
+  T_array<-seq(5,14,0.1)
+  timeliness_array<-seq(0,3,0.1)
+  m<-expand.grid(T_array,timeliness_array)
+  names(m)<-c("T","timeliness")
+  blocked<-mapply(prevent_func2,m$T,m$timeliness)
+  rel_infect_asympt<-1.0
+  prop_sympt_trans<-prop_sympt/(prop_sympt+(1-prop_sympt)*rel_infect_asympt)
+  df$beta_s2<-df$beta*(1-prop_sympt_trans*pgamma(df$tau, shape=5.807, scale = 0.948))
+  blocked2<-mapply(prevent_func2,m$T,m$timeliness)
+  blocked<-blocked*100
+  blocked2<-blocked2*100
+  m$timeliness<-m$timeliness*24
+  df2<-data.frame(cbind(m,blocked,blocked2))
+  save(df2,file="df2.Rda")
+}else{
+  load("df2.Rda")
+}
+
+
+p4<-ggplot(data=df2, aes(x=T,y=timeliness, z=blocked)) +
+  stat_contour(aes(color = ..level..)) + theme_minimal() +
+  xlab("Screening interval (days)") + ylab("Time from test to isolation (hours)") +
+  scale_x_continuous(breaks=c(5,7,10,14)) + scale_y_continuous(breaks=c(0,12,24,36,48,60,72))
+p5 <- direct.label(p4, "top.pieces") + labs(tag = "D)") 
+
+# pdf(file="Figure 1.pdf", width = 8, height = 8)
+grid.arrange(p1,p7,p3,p5,ncol=2)
+# dev.off()
+
+# grid.arrange(p1,p3,p5,ncol=3)
+```
+
+Testing for SARS-CoV-2 infection in symptomatic HCWs could be used to implement enhanced testing of other HCWs who have shared their working environment. This is analogous to contact tracing of confirmed or suspected cases in the community but focused on HCWs, where information about contacts in the workplace is likely to be more complete and rapid testing more easily implemented. Indeed, this was an important component of the response to the SARS-CoV outbreak in 2003 in Hong Kong where 20% of those infected were HCWs [@RN5376].
+
+Testing of symptomatic HCWs or their household members might also allow an earlier return to work if SARS-CoV-2 infection can be excluded, as proposed by NHS England. Current UK policy (21 April 2020) is self-isolation for 7 days from onset of symptoms among symptomatic individuals and for 14 days among household members to cover the period of risk for secondary infection, extending by 7 days among any household members subsequently developing symptoms. Under this policy, testing symptomatic HCWs may not allow an earlier return to work because of the time taken to obtain test results, continued sickness that may prevent work and because a single test may give a false negative result. For example, for PCR sensitivity and specificity of about 80-90% and 100% respectively [@RN5340; @RN5342], and assuming 40% of HCWs tested are infected, in line with current results from testing of suspected COVID-19 cases in the UK (UPDATE ref), then a single negative test would have only a 88-94% probability of being correct (negative predictive value, NPV).  This would therefore result in the return of infectious HCWs to the workplace, unless a second negative test were obtained, by which time the period of self-isolation may already have expired, depending on the testing turnaround time.
+
+The use of testing to enable return to work of HCWs may be more useful when targeted at HCWs self-isolating because of COVID-19 symptoms among their household members (about 40% of all HCWs absent from work due to COVID-19 according to the RCP survey). In this case, testing only the HCW would be of limited value because of the potential for continued exposure within the household. However, a negative test from the symptomatic household member(s), whose probability of SARS-CoV-2 infection is likely lower than HCWs (giving a higher NPV), would support an earlier return to work of the (healthy) HCW. Testing of household members of self-isolating HCWs in the UK has been limited (12.5% of household members tested in the RCP survey at the end of March compared with 31% of HCWs).
+
+
+_Regular PCR testing of all healthcare workers irrespective of symptoms_
+
+In addition to self-isolation based on symptoms, regular PCR-based screening of HCWs could further reduce transmission by identifying individuals with asymptomatic and presymptomatic infection who contribute to transmission. The effectiveness of this strategy depends on the sensitivity and specificity of the test, frequency of testing and timeliness of test results. We explored the effect of these variables in a simple mathematical model, which assumes that HCWs who screen positive for SARS-CoV-2 self-isolate and no longer contribute to transmission at the workplace (Appendix). This allows us to estimate the additional reduction in transmission from HCWs for a screening policy conducted with different frequencies and timeliness of results.
+This analysis indicates that weekly screening of HCWs by PCR would reduce onwards transmission from HCWs by a further 16-23% on top of self-isolation based on symptoms if results were available at 24 hours, depending on the infectiousness of asymptomatic infections (Figure 1D). If tests were to be done at the end of a shift and results made available before the next shift, then the time delay between testing and isolation would effectively be zero, increasing effectiveness to 25-33% (and also depending on exposure during time-off). mPOC assays would also provide immediate results and have a similar beneficial impact on the effectiveness of screening, depending on their sensitivity and specificity which is not yet well defined for clinical specimens.
+The effectiveness of screening HCWs is sensitive to the time at which virus shedding begins and the duration of shedding. There are few data on shedding in the first few days following exposure to infection, although most data point to a peak in the amount of virus shed around the time of symptom onset and subsequent decline that results in a rapid drop in PCR sensitivity [@RN5354; @RN5335]. We assumed the sensitivity of PCR was 90% from 3 to 21 days after infection. Earlier shedding would allow earlier detection and increased effectiveness of regular screening, whilst lower sensitivity would decrease effectiveness. In a sensitivity analysis, if detection probability is assumed to be proportional to infectiousness (estimated from the serial interval), the effectiveness of weekly testing increases to 27-35%, whilst earlier and sustained detection consistent with virus shedding data increases effectiveness to 33-40% (Supplementary Figure 1).
+
+The impact of regular PCR screening of HCWs on hospital and community SARS-CoV-2 transmission will depend on the extent of transmission among HCWs, from HCWs to the community and from HCWs to patients. The latter is likely to be limited if appropriate personal protective equipment is available and used correctly. However, the extent of transmission between HCWs and from HCWs to the community is unknown and could be substantial given the limited infection control measures in place outside of COVID-19 wards [@RN5378]. Detection of asymptomatic infected HCWs through regular PCR testing will also allow subsequent contact tracing at the workplace and implementation of infection control measures as for symptomatic cases. 
+
+The number of tests required for regular screening of HCWs will simply depend on the planned coverage of any such scheme. In the UK at the end of 2019, there were about 35,000 NHS staff working in intensive care, infectious disease or respiratory medicine [@RN5399]. Weekly testing of this group would require about 5,000 tests a day, considerably less than the UK government target of 100,000 tests daily by the end of April 2020. Of course, NHS staff exposed to COVID-19 include many other specialties and roles, and there has been considerable reassignment as a result of the COVID-19 pandemic, making the number at-risk who would benefit from testing difficult to determine but likely to be considerably greater than this figure. Regular screening may also be relevant to other high-risk groups, such as care home staff, which would further increase the number of tests required.
+
+
+## Immunity passports
+
+Immunity passports
+Confirmation of SARS-CoV-2 infection through PCR testing of HCWs could be used to confer an ‘immunity passport’ based on the evidence of infection following self-isolation. Among those not tested by PCR, antibody testing at least 3-4 weeks after symptom onset could be used instead to determine immune status to SARS-CoV-2. Those with acquired immunity could potentially be deployed in roles where exposure to infection is likely to be greatest. They would also be exempt from the need to self-isolate if a household member develops COVID-19 symptoms. The concept of using antibody tests to confer an immunity passport has also been discussed in the context of key workers and the general population, where evidence of acquired immunity after self-isolation could be used to support a return to work.
+
+There are significant technical and ethical challenges to the use of immunity passports. The first relates to the specificity of antibody testing, which is only about 90% or lower for rapid diagnostic tests but likely higher (e.g. 95-98%) for ELISA done in the laboratory depending on the choice of antigen (whole virus, nucleocapsid, or full or partial spike protein) [@RN5361; @RN5365] (Figure 2). Poor specificity will result in non-immune individuals receiving an immunity passport and potentially put at risk. Conversely, poor sensitivity compromises the effectiveness of such a scheme and would result in individuals with acquired immunity ineligible for an immunity passport and uncertain of their infection risk. Sensitivity depends not only on the quality of the test, but also on antibody titre, which is lower following mild illness and in children and young adults compared with older individuals[@RN5364]. 
+
+A second challenge is whether detectable antibody or PCR evidence of infection means protection against COVID-19 and if so, for how long. The initial rise in antibody titre 1-2 weeks after onset of symptoms is associated with clearance of SARS-CoV-2 infection, and passive transfer of antibodies from convalescent sera has been reported to improve outcomes in non-randomised trials [@RN5362;@RN5363]. However, the effectiveness and duration of protection against subsequent exposure is unknown, particularly against heterologous strains where weak cross-neutralising antibodies can result in enhanced pathology [@RN5359]. 
+
+Finally, there are concerns that the economic and personal benefits of an immunity passport to the general population would lead to fraud, and implementation of such a scheme is likely to face serious legal and ethical challenges related to discrimination based on immune status. 
+
+```{r PPV_plot, message=F, echo=F, warning=F,  fig.width=12,fig.height=4, fig.cap="**Figure 2** Sensitivity and specificity of currently available tests reported by FIND (www.finddx.org) (circles) and the thresholds (lines) for test performance required to provide a 95% probability of correctly predicting immunity (positive predictive value) for a prevalence of 5% (black) or 25% (grey) among those tested. Tests to the left of these lines meet this performance standard, although further clinical sample testing is required to confirm their specificity. Circles are drawn proportional to the total number of positive and negative control samples tested. The x-axis shows 1-specificity plotted with a square root transform to better show the high specificity threshold required."}
+
+ppv<-function(prev, sens, specif){
+  return(prev*sens/(prev*sens+(1-specif)*(1-prev)))
+}
+
+prevalence<-seq(0.001,0.5,0.001)
+ppv_0.9_0.9<-ppv(prevalence,0.9,0.9)
+ppv_0.9_0.95<-ppv(prevalence,0.9,0.95)
+ppv_0.95_0.9<-ppv(prevalence,0.95,0.9)
+ppv_0.8_0.8<-ppv(prevalence,0.8,0.8)
+ppv_0.95_0.95<-ppv(prevalence,0.95,0.95)
+
+df3<-data.frame(100*cbind(prevalence,ppv_0.9_0.9,ppv_0.8_0.8,ppv_0.95_0.95))
+df3 <- df3 %>%
+  select(prevalence, ppv_0.9_0.9,ppv_0.8_0.8,ppv_0.95_0.95) %>%
+  gather(key = "variable", value = "value", -prevalence)
+
+df3 <- df3 %>%
+  mutate(Sens_speci = recode(variable, "ppv_0.9_0.9" = "90", "ppv_0.8_0.8" = "80", "ppv_0.95_0.95" = "95"))
+
+p1<-ggplot(data=df3, aes(x=prevalence))+
+  geom_line(aes(y=value, color = Sens_speci)) + theme_minimal() +
+  xlab("Prevalence (%)") + ylab("Probability of COVID-19")+ scale_color_grey(start=0.8, end=0.2, name="Sensitivity &\nSpecificity") + 
+  ylim(0,100) + geom_vline(xintercept = 25, linetype="dotted") + labs(tag = "A)") 
+
+specif<-function(prev, sens, PPV){
+  return(1-(sens*prev*(1-PPV)/((1-prev)*PPV)))
+}
+
+sensi<-function(prev, speci, PPV){
+  x<-(PPV*(1-prev)*(1-speci)/((1-PPV)*prev))
+  if(x>1){
+    return(1)
+  }else{
+    return(x)
+  }
+}
+
+speci_aray<-seq(0,1,0.001)
+prev<-c(0.05,0.25)
+PPV<-c(0.99,0.95)
+m<-expand.grid(speci_aray,prev)
+names(m)<-c("specificity","prevalence")
+sens_array<-mapply(sensi, m$prevalence, m$specificity, rep(PPV[1], length(m$specificity)))
+sens_array2<-mapply(sensi, m$prevalence, m$specificity, rep(PPV[2], length(m$specificity)))
+df5<-data.frame(cbind(m,sens_array, sens_array2)*100)
+df5$prevalence<-as.factor(df5$prevalence)
+
+strip_hundreds<-function(x){
+  for(i in 1:(length(x)-1)){
+    if(x[i]==100 & x[i]==x[i+1]){
+      x[i]<-NA
+    } 
+  }
+  return(x)
+}
+df5$sens_array<-strip_hundreds(df5$sens_array)
+df5$sens_array2<-strip_hundreds(df5$sens_array2)
+#df5$PPV <- factor(df5$pravalence, rev(levels(df5$prevalence)))
+df5$minus_sens<-100-df5$sens_array
+df5$minus_sens2<-100-df5$sens_array2
+df5$minus_spec<-100-df5$specificity
+#df5$minus_sens[df5$minus_sens==0]<-NA
+
+finddx<-read.csv("COVIDDxData-2.csv", stringsAsFactors = F)
+finddx$sample_size<-finddx$Total.Positive+finddx$Total.Negative
+finddx$sq_inv_n<-1/sqrt(finddx$sample_size)
+
+#df5<-subset(df5, sens_array<=100)
+p<-ggplot(data=df5, aes(x=minus_spec))+
+#  geom_line(aes(y=sens_array, colour = prevalence), position="identity")
+  theme_minimal() +
+  geom_line(aes(y=sens_array2, colour = prevalence), position="identity") +
+  theme(panel.border = element_rect(colour = "black", fill=NA, size=0.5)) +
+  xlab("1-Specificity (%)") + ylab("Sensitivity (%)") + scale_color_manual(values=c("#000000","#A9A9A9")) +
+  coord_cartesian(ylim=c(0,100), xlim=c(0,50)) +
+  geom_point(data = subset(finddx,  Index.Test.Type=="Antibody test"), aes(x = 100-Specificity, y = Sensitivity, size=sample_size, fill=Manufacturer), alpha=0.5, shape=21, color="black") +
+   scale_size(range = c(.1, 12), "Samples tested (n)")
+p2<-p +  scale_x_continuous(trans='sqrt') #+ labs(tag = "B)")
+# grid.arrange(p1,p2,ncol=2,widths=c(1,1.6))
+# pdf(file="Figure 2.pdf", width = 8, height = 6)
+p2
+# dev.off()
+
+```
+ 
+
+## Role of testing in the community and during contact tracing
+
+Widespread testing of symptomatic suspected COVID-19 cases in the community would support monitoring of the epidemic, but is unlikely to help reduce transmission since individuals with suspected COVID-19 are already advised to self-isolate. The role of contact tracing in the control of COVID-19 has been thoroughly explored in models, which suggest immediate app-based notification of contacts on symptom onset in the index case would be required to allow effective control of SARS-CoV-2 transmission because of substantial asymptomatic and presymptomatic transmission from the contacts [@RN5344; @RN5327; @RN5320]. Although testing is frequently mentioned in the context of contact tracing (‘test, trace, isolate’), it is not required for contact-tracing and isolation based on symptoms alone – indeed, testing may in fact slow down and limit effectiveness if testing results take time and contacts are not traced until results are available. In Wuhan, China, sustained reductions in the reproduction number were achieved through quarantine of suspected COVID-19 cases based on symptoms and universal, door-to-door symptom surveys [@RN5395].
+
+Testing of suspected cases to exclude COVID-19 infection will become increasingly relevant as the incidence of COVID-19 declines below that of other causes of influenza-like illness (ILI). However, at current high COVID-19 incidence rates, testing is likely to be most useful to inform self-isolation among contacts of suspected cases by excluding infection and allowing earlier exit from isolation/quarantine (as for HCWs self-isolating because of a symptomatic household member). One advantage of this it that it might allow recursive contract tracing (i.e. tracing contacts of contacts), which would result in a very high number of people in isolation or quarantine (an ‘epidemic of isolation’) without testing to release negative contacts from quarantine
+
+Even without recursive tracing, testing of contacts would require substantial test numbers and significant investment of laboratory and staff resources. For example, in England between 18 March and 16 April 2020 on average 15,000 calls to the NHS 111 helpline were triaged as potential COVID-19 cases each day [@RN5391]. Although lockdown was ordered on the 23 March, reducing reported daily contacts from about 11 to just 3 on average [@RN5390], this would still imply a need for about 90,000 tests per day to support testing of suspected cases and their contacts (assuming 2 of these 3 contacts are household members and therefore the same each day and that 1 is different each day for 3 days of infectiousness before/at symptom onset). Moreover, testing of contacts would not reduce their contribution to transmission unless it promoted individual adherence to self-isolation and infection control (i.e. a behavioural effect). After lockdown, the number of tests required may be even higher because of increased numbers of contacts and the continued incidence of ILI. For example, during a typical influenza season, daily ILI rates in England are about 2,400 (4 per 100,000) based on GP consultations and substantially higher based on self-reported symptoms [@RN5392]. This would require at least 50,000-120,000 tests daily assuming 20-50 contacts tested per case, consistent with published estimates for countries conducting contact-tracing without lockdown [@RN5351].
+
+
+## Conclusions
+
+PCR and antibody testing are required for surveillance of the COVID-19 pandemic and will play a critical role in informing the risk of lifting various components of social distancing interventions (‘lockdown’) currently in place by allowing accurate estimates of the reproduction number and identifying the extent of transmission. However, their direct contribution to the prevention of transmission may be limited to populations at high risk of acquiring infection and transmitting it to vulnerable people, such as HCWs and other key workers (e.g. in care homes for the elderly). In these populations, regular screening irrespective of symptoms could prevent about one third of transmission, depending on test sensitivity and the timeliness of results. Regular screening is now being piloted in some UK hospitals and will provide immediate data on the effectiveness of this strategy. 
+
+
+## Acknowledgments
+
+We would like to thank Ruth McCabe and Alessandra Lochen in the Imperial College COVID-19 hospitalization and economics team for helpful discussions about NHS staffing. We acknowledge the MRC for Centre funding. 
+
+## Appendix
+
+### Details of mathematical model
+
+We assume infectiousness over time since infection follows a Weibull distribution, with a mean of 6 days consistent with published estimates of the serial interval for COVID-19  [@RN5344]. TThis differs from SARS-CoV-2 shedding, which can be detected from about 3 days after infection (i.e. about 2 days before the onset of symptoms) and persists for up to 2-3 weeks at declining levels [@RN5335; @RN5343]. We denote infectiousness over time since infection $\tau$ by $\beta(\tau)$. If infected individuals self-isolate following the onset of symptoms, then infectiousness becomes
+
+$$\beta_s(\tau)=(1-\sigma \, \Theta(\tau))\,\beta(\tau) $$
+
+where $\Theta(\tau)$ is the proportion of infected individuals who have developed symptoms and self-isolate by time $\tau$ and $\sigma$ is proportion of transmission that is from symptomatic individuals. If we assume that individuals self-isolate immediately at onset of symptoms, then $\Theta(\tau)$ is the incubation period distribution, for which we use a gamma distribution with mean 5.5 days and variance 5.2 days as reported in Lauer et al. 2020 [-@RN5310]. The proportion of transmission that is from symptomatic individuals depends on the proportion of infections that are symptomatic $s$, and the relative infectiousness of asymptomatic compared with symptomatic individuals $r$, such that $\sigma = s / (s+(1-s)r)$. Note that this formulation means the effectiveness of self-isolation scales linearly with the proportion of transmission that is presymptomatic in the absence of self-isolation, which we assume to be 40% based on available data [@RN5343;@RN5386]. If different estimates of this proportion become available, the effectiveness of self-isolation can therefore simply be scaled accordingly. 
+
+If PCR screening of a HCW identifies SARS-CoV-2 at time $\tau$ after infection, assuming this individual immediately self-isolates, then this would prevent a proportion of their transmission
+
+$$ p(\tau) = \int_{t=\tau}^\infty \frac{\beta(t)}{R}\,dt $$
+where $R$ is the reproduction number, given by the integral of infectiousness over time. In reality, self-isolation will not immediately follow sample collection. If we assume this takes $x$ days, then the impact of screening at time $t$ after infection is reduced from $p(\tau)$ to $p(\tau+x)$.
+
+We assume a constant hazard of infection among HCWs over time, such that if we test them every $T$ days the probability that they were infected at time $t$ for $0 < t < T$ is simply $1/T$. If we had a test that was 100% sensitive for infection from day zero after infection and could isolate HCWs immediately, then the proportion of infections prevented by a strategy of screening every $T$ days would be
+
+$$ \pi(T) = \int_{\tau=0}^T \frac{p(\tau)}{T} \,d\tau $$
+
+For a test that has <100% sensitivity, we might miss infection the first time we screen. In this case
+
+$$  \pi(T) = \int_{\tau=0}^T \frac{S(\tau)\,p(\tau)}{T} \,d\tau $$
+
+where $S(\tau)$ is the probability of detecting shedding of SARS-CoV-2 at time $\tau$ after infection. After multiple tests 
+
+$$  \pi(T) = \int_{\tau=0}^T \frac{S(\tau)\,p(\tau)}{T} \,d\tau\; + \int_{\tau=0}^T \frac{(1-S(\tau))S(T+\tau)\,p(T+\tau)}{T} \,d\tau\; + \dots \;\; \\ \int_{\tau=0}^T \prod_{n=1}^{N-1}(1-S((n-1)T+\tau))\, \frac{S(NT+\tau)\,p(NT+\tau)}{T} \,d\tau $$
+
+where $N$ is the maximum number of tests that would occur during a typical infectious period (and therefore depends on the interval $T$). 
+
+We explored a range of assumptions for $S(\tau)$ including a constant probability of detection of 90% from 3 to 21 days after infection and a probability of detection that depends on infectiousness or viral shedding.
+
+### Supplementary Figure 1
+
+```{r plot_sensitivity, message=F, warning=F, echo=F, fig.width=10,fig.height=4, fig.cap="**Appendix Figure 1** Effectiveness of regular screening of HCWs under different assumptions about the sensitivity of PCR to detect SARS-CoV-2 after infection. In A) sensitivity is shown proportional to estimated infectiousness (black) or to persist for longer (red), with a published estimate of sensitivity inferred from different data sources shown by the dashed line [@RN5354]. Effectiveness of regular screening is shown in panels B) and C) for these two assumptions respectively, with the remaining parameters as for Figure 1."}
+
+sens_data<-data.frame(read.csv(file="estimated sensitivity post onset wikrama et al.csv", stringsAsFactors = F))
+
+#mean infection age of detected cases
+# sens_data$pdf<-abs(c(0,diff(sens_data$est_sens)))
+# sum(sens_data$est_sens*sens_data$day_post_onset)/sum(sens_data$est_sens)
+
+sens_data$day_post_onset<-sens_data$day_post_onset+5.5 #assuming mean time to onset of symptoms is 5.5 days
+#median_shed<-11.3
+#shape_shed = 1.43
+#scale_shed=median_shed/(log(2)^(1/shape_shed))
+#sens_model<-dweibull(df$tau, shape = shape_shed, scale = scale_shed)
+
+
+  gam_shape<-2.7
+  sens_model<-dgamma(df$tau, shape = gam_shape, scale = 11/gam_shape)
+  sens_model2<-df$beta
+  peak_shed<-max(sens_model)
+  sens_model<-0.95*sens_model/peak_shed
+  peak_shed<-max(sens_model2)
+  sens_model2<-0.95*sens_model2/peak_shed
+  p1<- ggplot(data=df, aes(x=tau)) +
+    geom_line(aes(y=sens_model), colour="#CC6666") + geom_line(aes(y=sens_model2)) + ylab(expression("PCR sensitivity")) + xlab(expression("Time since infection")) + xlim(0,25) +
+    geom_line(data=sens_data, aes(x=day_post_onset, y=est_sens), linetype="dashed",colour="#CC6666") + labs(tag = "A)")  +
+    theme_minimal() 
+  
+if(recalc==TRUE){
+  st_tmp<-df$st
+  df$st<-sens_model
+  rel_infect_asympt<-0.1
+  prop_sympt_trans<-prop_sympt/(prop_sympt+(1-prop_sympt)*rel_infect_asympt)
+  df$beta_s2<-df$beta*(1-prop_sympt_trans*pgamma(df$tau, shape=5.807, scale = 0.948))
+  
+  T_array<-seq(5,14,0.1)
+  timeliness_array<-seq(0,3,0.1)
+  m<-expand.grid(T_array,timeliness_array)
+  names(m)<-c("T","timeliness")
+  blocked2<-mapply(prevent_func2,m$T,m$timeliness)
+  df$st<-sens_model2
+  blocked<-mapply(prevent_func2,m$T,m$timeliness)
+  df$st<-st_tmp
+  
+  blocked<-blocked*100
+  blocked2<-blocked2*100
+  m$timeliness<-m$timeliness*24
+  df3<-data.frame(cbind(m,blocked,blocked2))
+  save(df3,file="df3.Rda")
+}else{
+  load("df3.Rda")
+}
+
+p<-ggplot(data=df3, aes(x=T,y=timeliness, z=blocked)) +
+  stat_contour(aes(color = ..level..)) + theme_minimal() +
+  xlab("Screening interval (days)") + ylab("Time from test to isolation (hours)") +
+  scale_x_continuous(breaks=c(5,7,10,14)) + scale_y_continuous(breaks=c(0,12,24,36,48,60,72))
+p2 <- direct.label(p, "top.pieces") + labs(tag = "B)") 
+
+p<-ggplot(data=df3, aes(x=T,y=timeliness, z=blocked2)) +
+  stat_contour(aes(color = ..level..)) + theme_minimal() +
+  xlab("Screening interval (days)") + ylab("Time from test to isolation (hours)") +
+  scale_x_continuous(breaks=c(5,7,10,14)) + scale_y_continuous(breaks=c(0,12,24,36,48,60,72))
+p3 <- direct.label(p, "top.pieces") + labs(tag = "C)") 
+
+grid.arrange(p1,p2,p3,ncol=3)
+
+# pdf(file="Supplementary Figure 1.pdf", width = 10, height = 4)
+# grid.arrange(p1,p2,p3,ncol=3)
+# dev.off()
+
+```
+
+
+# References
+
+
+
+
+
